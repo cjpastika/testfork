@@ -1,0 +1,133 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="ezrassor">
+
+  <!--
+    EZRASSOR Robot Description
+
+    This URDF defines the robot's structure for NAV2:
+    - base_footprint: Ground contact point (for navigation)
+    - base_link: Robot center (main reference frame)
+    - laser_frame: Where LiDAR data originates
+
+    TF Tree:
+    base_footprint -> base_link -> laser_frame
+  -->
+
+  <!-- ==================== ROBOT PARAMETERS ==================== -->
+  <!-- You can adjust these to match your actual rover -->
+
+  <xacro:property name="body_length" value="0.6"/>   <!-- meters (2 feet) -->
+  <xacro:property name="body_width" value="0.6"/>    <!-- meters (2 feet) -->
+  <xacro:property name="body_height" value="0.3"/>   <!-- meters -->
+  <xacro:property name="ground_clearance" value="0.15"/>  <!-- height of base_link above ground -->
+
+  <!-- LiDAR mounting position (relative to base_link center) -->
+  <xacro:property name="lidar_x" value="0.0"/>       <!-- centered front-back -->
+  <xacro:property name="lidar_y" value="0.0"/>       <!-- centered left-right -->
+  <xacro:property name="lidar_z" value="0.25"/>      <!-- 25cm above base_link -->
+
+
+  <!-- ==================== BASE FOOTPRINT ==================== -->
+  <!--
+    This is a virtual frame at ground level, directly below the robot.
+    NAV2 uses this for the robot's "footprint" on the ground.
+  -->
+  <link name="base_footprint"/>
+
+
+  <!-- ==================== BASE LINK ==================== -->
+  <!--
+    The main robot body frame. All other parts attach to this.
+    This is the robot's "center" for navigation purposes.
+  -->
+  <link name="base_link">
+    <!-- Visual: What you see in RViz (optional but helpful) -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+      <material name="grey">
+        <color rgba="0.5 0.5 0.5 0.8"/>
+      </material>
+    </visual>
+
+    <!-- Collision: Used for collision checking (same as visual here) -->
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="${body_length} ${body_width} ${body_height}"/>
+      </geometry>
+    </collision>
+  </link>
+
+  <!-- Joint connecting base_footprint to base_link -->
+  <joint name="base_joint" type="fixed">
+    <parent link="base_footprint"/>
+    <child link="base_link"/>
+    <!-- Lift base_link up by ground_clearance + half body height -->
+    <origin xyz="0 0 ${ground_clearance + body_height/2}" rpy="0 0 0"/>
+  </joint>
+
+
+  <!-- ==================== LIDAR ==================== -->
+  <!--
+    RPLidar A1 mounted on top of the robot.
+    The frame_id in the LiDAR driver must match this link name!
+  -->
+  <link name="laser_frame">
+    <!-- Visual representation of the LiDAR -->
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <cylinder radius="0.04" length="0.04"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <!-- Joint connecting LiDAR to base_link -->
+  <joint name="laser_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="laser_frame"/>
+    <!-- Position: centered on robot, 25cm above base_link -->
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 0"/>
+  </joint>
+
+
+  <!-- ==================== DEPTH CAMERA (placeholder) ==================== -->
+  <!--
+    Uncomment this section when the Orbbec Astra Pro Plus arrives.
+    Adjust the xyz values to match where you mount it.
+  -->
+  <!--
+  <link name="camera_link">
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.03 0.15 0.04"/>
+      </geometry>
+      <material name="black">
+        <color rgba="0.1 0.1 0.1 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <joint name="camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="camera_link"/>
+    <origin xyz="0.3 0 0.1" rpy="0 0 0"/>
+  </joint>
+
+  <link name="camera_depth_frame"/>
+
+  <joint name="camera_depth_joint" type="fixed">
+    <parent link="camera_link"/>
+    <child link="camera_depth_frame"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+  -->
+
+</robot>
