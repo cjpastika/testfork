@@ -1,0 +1,115 @@
+You are helping with the RE-RASSOR (EZRASSOR) lunar rover project. This is a physical ROS2 Jazzy skid-steer rover (~0.6m x 0.6m, 4-wheel tank turning) being upgraded from manual RC control to autonomous navigation using NAV2.
+
+## Repository Structure
+
+The repo is at /home/user/testfork on branch claude/nav2-autonomous-navigation-5OECs.
+
+### Existing Code (from previous semesters):
+- `2025-Fall-UCF-RE-RASSOR-System-Autonomy-compvis/` - YOLO-based rock detection (YOLOv8, lunar rock dataset)
+- `2025-Fall-UCF-RE-RASSOR-System-Autonomy-main/` - Core system with quadtree cartography, empty stubs for most packages
+- `2025-Fall-UCF-RE-RASSOR-System-Autonomy-mission-control/` - Mission control with MongoDB (BEING REMOVED), custom interfaces, waypoint management
+- `2025-Fall-UCF-RE-RASSOR-System-Autonomy-pathing/` - D* Lite path planner, B-spline smoothing, quadtree costmap, routing node (BEING REPLACED BY NAV2)
+- `source/ezrassor_controller_server/` - HTTP-to-ROS bridge (Flask server) that translates HTTP POST requests into ROS topic commands
+
+### New Code (NAV2 integration, in progress):
+- `src/ezrassor_description/` - URDF and TF tree configuration (COMPLETED)
+- `NAV2_INTEGRATION_TASKS.txt` - Full task breakdown for 6-person team
+
+## Current Rover Hardware
+- Drive: Skid-steer, 4 wheels, tank-like turning
+- LiDAR: NEEDS REPLACEMENT (previous RPLidar A1 broke). Replacement TBD - any 2D 360-degree LiDAR with ROS2 support will work
+- Depth Camera: Orbbec Astra Pro Plus (NOT YET ARRIVED) - has ROS2 Jazzy support via OrbbecSDK_ROS2
+- Camera: Unknown model (for YOLO rock detection)
+- IMU: None
+- Wheel Encoders: Unknown/TBD
+- Physical footprint: ~0.6m x 0.6m (2ft x 2ft)
+- Testing: Physical hardware only (no simulation)
+
+## Existing Control Interface
+The ezrassor_controller_server publishes to these topics:
+- `/ezrassor/wheel_instructions` (geometry_msgs/Twist) - THIS IS THE CMD_VEL EQUIVALENT
+- `/ezrassor/front_arm_instructions` (std_msgs/Float64) - RAISE=1.0, LOWER=-1.0, STOP=0.0
+- `/ezrassor/back_arm_instructions` (std_msgs/Float64)
+- `/ezrassor/front_drum_instructions` (std_msgs/Float64) - DIG=1.0, DUMP=-1.0, STOP=0.0
+- `/ezrassor/back_drum_instructions` (std_msgs/Float64)
+- `/ezrassor/routine_actions` (std_msgs/Int8) - AUTO_DRIVE=1, AUTO_DIG=2, AUTO_DUMP=4, AUTO_DOCK=8, FULL_AUTONOMY=16, STOP=32
+
+## Custom ROS2 Interfaces (re_rassor_interfaces)
+### Messages:
+- LocationStatus.msg: position_x, position_y, time, velocity, orientation, goal_x, goal_y
+- ObstacleLocation.msg: x, y
+- ObstacleArray.msg: obstacles[]
+- ObstacleDetectionMsg.msg: x, y, length, height
+- YoloMsg.msg: x, y, width, height, norm coords, angles, name
+- LidarMsg.msg: x, y, length, distance, min_angle, max_angle
+- Plus Array versions of each
+
+### Services:
+- NewGoal.srv, NewPath.srv, ObstacleArray.srv, InitialRoverPosition.srv, FinalLocation.srv, LocationStatus.srv, InitialObstacleArray.srv
+
+## NAV2 Integration Plan
+
+### What NAV2 Replaces:
+- D* Lite path planner → NAV2 planner server (NavFn with A*)
+- Quadtree costmap → NAV2 costmap_2d (obstacle + inflation layers)
+- RoutingNode → NAV2 planner + controller servers
+- Path smoothing → NAV2 smoother server
+- Custom obstacle mapping → NAV2 costmap layers fed by LiDAR /scan topic
+
+### What We Keep:
+- YOLO rock detection (integrate later as costmap plugin)
+- ezrassor_controller_server (HTTP control interface)
+- Arm/drum control topics
+- LiDAR and depth camera sensor messages
+
+### What We Remove:
+- MongoDB (was used for telemetry persistence, not needed)
+- Most custom interfaces (replaced by standard nav2_msgs, geometry_msgs)
+- D* Lite, quadtree costmap, routing node, path smoothing code
+
+### Key Design Decisions:
+- Topic remapping: NAV2 /cmd_vel → /ezrassor/wheel_instructions
+- Odometry: Using rf2o_laser_odometry (LiDAR scan matching) since no wheel encoders
+- Controller: Regulated Pure Pursuit (good for skid-steer)
+- Localization: Static map→odom transform for now (no AMCL, no pre-built map)
+- All runtime code should be C++ for real-time performance
+- Launch files remain Python (standard ROS2 practice, just configuration)
+
+## Team Task Breakdown (6 people):
+
+### Person 1 (LiDAR): Set up LiDAR driver, get /scan publishing
+### Person 2 (URDF/TF): COMPLETED - ezrassor_description package created with URDF and launch file
+### Person 3 (Odometry): Set up rf2o_laser_odometry, get /odom publishing and odom→base_link TF
+### Person 4 (NAV2 Config): Create ezrassor_nav2 package with nav2_params.yaml (planner, controller, costmap, behaviors)
+### Person 5 (Mission Control): Rewrite mission control using NAV2 action clients in C++ (not nav2_simple_commander Python)
+### Person 6 (Integration): Create ezrassor_bringup with master launch files, topic remapping, end-to-end testing
+
+## Packages to Create:
+1. `ezrassor_description` - DONE (URDF + TF)
+2. `ezrassor_nav2` - NAV2 config YAML + launch file
+3. `ezrassor_mission_control` - Simplified C++ goal sender using NAV2 action clients
+4. `ezrassor_bringup` - Master launch files (sensors, nav2, full autonomy)
+5. `ezrassor_localization` - If needed later for sensor fusion
+
+## Phase 2 (Later, when depth camera arrives):
+- Install OrbbecSDK_ROS2 driver
+- Add camera_link to URDF (placeholder already in xacro file, commented out)
+- Add voxel_layer to NAV2 costmap config
+- Integrate YOLO rock detection as custom costmap plugin
+- Sensor fusion with robot_localization EKF
+
+## TF Tree:
+```
+map → odom → base_footprint → base_link → laser_frame
+                                         → camera_link (later)
+```
+
+## NAV2 Configuration Summary:
+- Robot radius: 0.42m
+- Inflation radius: 0.55m
+- Costmap resolution: 0.05m
+- Local costmap: 5m x 5m rolling window
+- Max velocity: 0.3 m/s (tune based on motors)
+- Controller: Regulated Pure Pursuit
+- Planner: NavFn with A*
+- Recovery behaviors: spin, backup, drive_on_heading, wait
